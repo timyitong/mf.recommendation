@@ -1,0 +1,11 @@
+lda.o: lda.c lda.h feature.h learn.h writer.h dmatrix.h util.h
+learn.o: learn.c learn.h feature.h vbem.h newton.h likelihood.h dmatrix.h \
+  util.h
+vbem.o: vbem.c lda.h feature.h gamma.h util.h
+newton.o: newton.c newton.h gamma.h util.h
+likelihood.o: likelihood.c likelihood.h feature.h dmatrix.h util.h
+writer.o: writer.c writer.h
+feature.o: feature.c feature.h
+dmatrix.o: dmatrix.c dmatrix.h
+gamma.o: gamma.c
+util.o: util.c util.h

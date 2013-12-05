@@ -1,4 +1,4 @@
-function [B, i, fks] = soft_impute(Y, B_init, Omega, lambda, err, maxit)
+function [B, fks] = soft_impute(Y, B_init, Omega, lambda, err, maxit)
 %SOFT_IMPUTE: implementation of soft-impute algorithm
 %Args:
 %   Y: train matrix
@@ -27,7 +27,7 @@ B = B_init;
 
 for i=1:maxit
     X = Y.*Omega + B.*Omega_opp;
-    [U, S, V] = svd(X);
+    [U, S, V] = svd(X, 0);
     S_lambda = max(S-lambda,0);
     B = U*S_lambda*V';
     new_fk = f(Y, B, Omega, S, lambda);

@@ -1,49 +1,54 @@
-train_filename = '~/Dev/pilot_exp_rec/data/ml-100k/u1.base';
-test_filename = '~/Dev/pilot_exp_rec/data/ml-100k/u1.test';
-usernum = 943;
-itemnum = 1682;
+%------------------------
+% MOVIE_LENS DATASET
+%------------------------
+train_filename              = '../data/ml-100k/u1.base';
+test_filename               = '../data/ml-100k/u1.test';
+usernum                     = 943;
+itemnum                     = 1682;
+% Load Data
+V                           = read_movielens_data(train_filename, usernum, itemnum);
+V_test                      = read_movielens_data(test_filename, usernum, itemnum);
+% Mask of V
+Omega                       = V~=0;
+Omega_test                  = V_test~=0;
 
-V = read_movielens_data(train_filename, usernum, itemnum);
-[V_norm, V_avg] = normalize( V );
+% Mean and l2 normalization
+[V_norm, V_avg]             = normalize( V );
+[V_test_norm, V_test_avg]   = normalize( V_test );
 
-V_test = read_movielens_data(test_filename, usernum, itemnum);
-[V_test_norm, V__test_avg] = normalize( V_test );
-
-% Load small movie lens data
-% Tr
-% Te
-load('~/Box Documents/convex optimazation/hw2/data/train.mat');
-load('~/Box Documents/convex optimazation/hw2/data/test.mat');
+% Median normalization
+%   make the median of each column 0.5
+%   make the deviation from median to 0.25
+[V_norm_median, V_med, V_devmed]             = normalize_median( V);
+[V_test_norm_median]        = normalize_median( V_test);
 
 %------------------------
 % k Nearest Neighbour
 %------------------------
-k = 30;
-
-% user-user
-[V_est, S] = knn(V_norm,V_avg, k);
-
-err = rmse(V_est, V_test);
-disp(err);
-
-% item-item
-[V_est, S] = knn(V_norm',V_avg', k);
-
-V_est = V_norm*S+V_avg;
-err = rmse(V_est, V_test);
-disp(err);
+k_range                     = round(linspace(1, 800, 10));
+plot_name                   = '../plots/knn/rmse-knn-800.eps';
+knn_main(V_norm, V_avg, V_test, k_range, plot_name);
 
 %------------------------
 % NMF Mathworks
 % somehow not working
 % always output the same value
 %------------------------
-nmf_rank_size = 500;
-[W, H] = nmf(S, nmf_rank_size, 1);
-V_hat = (W*H)*V_norm+V_avg;
-err = rmse(V_hat, V_test);
-disp(err);
+k                           = 50;
+steps                       = 300;
 
+err = [];
+for k = k_range
+    [W, H, fnc_vals] = nmf_raw(V_norm_median, k, steps);
+    % W_norm = normalize_median(W);
+    % [ H_test, fnc_vals ] = nmf_raw_test( V_test_norm_median, W , k, steps);
+    [ V_predict ] = denormalize_median( W*H, V_med, V_devmed );
+    err = [err;rmse(V_predict, V_test)];
+end
+figure(1);plot(k_range, err, '-'); saveas(1, '../plots/nmf/rmse-median_norm-800.eps');
+
+
+%===================
 nmf_rank_size = 100;
 [W, H] = sqrtnmf(S, nmf_rank_size, 1);
 V_hat = (W*H)*V_norm+V_avg;
@@ -76,33 +81,95 @@ disp(err);
 % Soft impute
 %------------------------
 
-Y = V;
-lambda = 100;
-maxit = 500;
-err = 0.0001;
-Omega = Y~=0;
-B_init = zeros(size(Y,1),size(Y,2));
-[B, i, fks] = soft_impute(Y, B_init, Omega, lambda, err, maxit);
-err = rmse(B, V_test);
-disp(err);
+%Version 1: median normalization
 
-    % smaller dataset
-    Y = Tr;
-    Omega = Y~=0;
-    B_init = zeros(size(Y,1),size(Y,2));
-    [B, i, fks] = soft_impute(Y, B_init, Omega, lambda, err, maxit);
-    err = rmse(B, Te);
-    disp(err);
+Y = V_norm_median;
+lambda = linspace(0.1, 100, 10);
+maxit = 500;
+epsilon = 0.0001;
+Omega = Y~=0;
+err = [];
+
+for i = 1:10
+    B_init = randn(size(Y));
+    [B, fks] = soft_impute(Y, B_init, Omega, lambda(i), epsilon, maxit);
+    [ B_norm ] = denormalize_median( B, V_med, V_devmed );
+    err = [err; rmse(B_norm, V_test)];
+
+%     [B_med] = normalize_median(B); 
+%     err = [err; rmse(B_med, V_test_norm_median)];
+end
+figure(1);plot(lambda, err, '-'); saveas(1, '../plots/soft_impute/rmse-soft-Ymedian-800.eps');
+
+
+%Version 1: median normalization
+
+Y = V;
+lambda = linspace(0.1, 100, 10);
+maxit = 500;
+epsilon = 0.0001;
+Omega = Y~=0;
+err = [];
+
+for i = 1:10
+    B_init = randn(size(Y));
+    [B, fks] = soft_impute(Y, B_init, Omega, lambda(i), epsilon, maxit);
+    [ B_norm ] = denormalize_median( B, V_med, V_devmed );
+    err = [err; rmse(B_norm, V_test)];
+
+%     [B_med] = normalize_median(B); 
+%     err = [err; rmse(B_med, V_test_norm_median)];
+end
+figure(2);plot(lambda, err, '-'); saveas(2, '../plots/soft_impute/rmse.soft_Y.eps');
+
 
 %------------------------
 % LDA
 %------------------------
+% cluster movies into clusters
+err = [];
 
+for k = 1:5:100
+    alpha = real(load(strcat('../lda-c/lda-0.2/results/ml.movie.model',num2str(k),'.alpha')))';
+    N = size(alpha, 1);
+    beta = real(load(strcat('../lda-c/lda-0.2/results/ml.movie.model',num2str(k),'.beta')))'; % each column is the probability for given movie into a topic's probability
+    % movie_topic = (alpha*ones(1, itemnum)).*beta;
+    movie_topic = beta;
+    user_topic = V*movie_topic';
+    % for i = 1:usernum
+    %     user_topic(i,:) = user_topic(i,:)/sum(user_topic(i,:));
+    % end
 
+    movie_avg = ones(1,itemnum);
+    for i = 1:itemnum
+        nonzeros = V(V(:,i) ~= 0,i);
+        movie_avg(1,i) = mean(nonzeros);
+        if (isnan(movie_avg(1,i)))
+            movie_avg(1,i) = 0;
+        end
+    end
+    topic_avg = movie_avg*movie_topic';
+
+    Predict = user_topic*movie_topic;
+
+    Predict_norm = ones(size(Predict));
+    for i = 1:size(Predict, 1)
+        Predict(i, :) = Predict(i, :) - mean(Predict(i, :));
+        Predict_norm(i,:) = Predict(i, :) / norm(Predict(i, :));
+        Predict_norm(i,:) = Predict_norm(i,:) / (max(Predict_norm(i,:))-min(Predict_norm(i,:))) * 5;
+        Predict_norm(i,:) = Predict_norm(i,:) + V_avg(i,:);
+    end
+
+    % Predict_norm = denormalize_median(Predict, V_med, V_devmed);
+    err = [err;rmse(Predict_norm, V_test)];
+end
+
+plot(err, 1:5:100);
 
 %------------------------
 % PCA
 %------------------------
+
 
 %------------------------
 % ICA
