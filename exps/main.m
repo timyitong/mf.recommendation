@@ -38,7 +38,7 @@ k                           = 50;
 steps                       = 300;
 
 err = [];
-for k = k_range
+for k = large_k_range
     [W, H, fnc_vals] = nmf_raw(V_norm_median, k, steps);
     % W_norm = normalize_median(W);
     % [ H_test, fnc_vals ] = nmf_raw_test( V_test_norm_median, W , k, steps);
@@ -46,6 +46,34 @@ for k = k_range
     err = [err;rmse(V_predict, V_test)];
 end
 figure(1);plot(k_range, err, '-'); saveas(1, '../plots/nmf/rmse-median_norm-800.eps');
+
+%-------Sparse NMF ----
+alpha = 0.3;
+fname = 'snmf';
+showflag = 0;
+k = 50;
+err = [];
+for  k = k_range
+    [W, H, objhistory] = snmf( V_norm_median, k, alpha, fname, showflag );
+    [ V_predict ] = denormalize_median( W*H, V_med, V_devmed );
+    err = [err;rmse(V_predict, V_test)];
+end
+figure(2);plot(k_range, err, '-'); saveas(1, '../plots/nmf/rmse-snmf-100.eps');
+
+%-------local NMF ----
+alpha = 0.3;
+fname = 'snmf';
+showflag = 0;
+beta = 0.3;
+k = 50;
+err = [];
+for  k = k_range
+    [W, H, objhistory] = lnmf( V_norm_median, k, alpha,beta, fname, showflag );
+    [ V_predict ] = denormalize_median( W*H, V_med, V_devmed );
+    err = [err;rmse(V_predict, V_test)];
+end
+figure(2);plot(k_range, err, '-'); saveas(1, '../plots/nmf/rmse-snmf-100.eps');
+
 
 
 %===================
@@ -129,7 +157,9 @@ figure(2);plot(lambda, err, '-'); saveas(2, '../plots/soft_impute/rmse.soft_Y.ep
 % cluster movies into clusters
 err = [];
 
-for k = 1:5:100
+large_k_range = [1    90   179   267   356   445   534];
+
+for k = large_k_range %1:5:100
     alpha = real(load(strcat('../lda-c/lda-0.2/results/ml.movie.model',num2str(k),'.alpha')))';
     N = size(alpha, 1);
     beta = real(load(strcat('../lda-c/lda-0.2/results/ml.movie.model',num2str(k),'.beta')))'; % each column is the probability for given movie into a topic's probability
@@ -164,7 +194,7 @@ for k = 1:5:100
     err = [err;rmse(Predict_norm, V_test)];
 end
 
-plot(err, 1:5:100);
+plot(large_k_range, err);
 
 %------------------------
 % PCA
